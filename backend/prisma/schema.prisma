@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  MECHANIC
+  CLIENT
+}
+
+enum ServiceRequestStatus {
+  NEW
+  AI_TRIAGE
+  QUEUED
+  IN_PROGRESS
+  WAITING_APPROVAL
+  COMPLETED
+  CANCELLED
+}
+
+enum RequestPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ServiceItemType {
+  SERVICE
+  PART
+}
+
+enum ServiceItemUnit {
+  PIECE
+  HOUR
+  LITER
+  KIT
+}
+
+/// Tenant root. Every business record belongs to exactly one workshop.
+model Workshop {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  currency  String   @default("UAH") @db.VarChar(3)
+  timezone  String   @default("Europe/Kyiv")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  vehicles        Vehicle[]
+  serviceRequests ServiceRequest[]
+  serviceItems    ServiceItem[]
+  requestItems    RequestItem[]
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  workshopId   String   @db.Uuid
+  email        String
+  passwordHash String?
+  firstName    String
+  lastName     String
+  phone        String?
+  role         UserRole
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workshop         Workshop         @relation(fields: [workshopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vehicles         Vehicle[]        @relation("VehicleOwner")
+  assignedRequests ServiceRequest[] @relation("AssignedMechanic")
+
+  // The compound key lets child records enforce that their user is in the same tenant.
+  @@unique([id, workshopId])
+  @@unique([workshopId, email])
+  @@index([workshopId, role])
+}
+
+model Vehicle {
+  id           String   @id @default(uuid()) @db.Uuid
+  workshopId   String   @db.Uuid
+  ownerId      String   @db.Uuid
+  make         String
+  model        String
+  year         Int
+  vin          String?  @db.VarChar(17)
+  licensePlate String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workshop        Workshop         @relation(fields: [workshopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  owner           User             @relation("VehicleOwner", fields: [ownerId, workshopId], references: [id, workshopId], onDelete: Restrict, onUpdate: Cascade)
+  serviceRequests ServiceRequest[]
+
+  @@unique([id, workshopId])
+  @@unique([workshopId, vin])
+  @@index([workshopId, ownerId])
+  @@index([workshopId, licensePlate])
+}
+
+model ServiceRequest {
+  id                 String               @id @default(uuid()) @db.Uuid
+  workshopId         String               @db.Uuid
+  vehicleId          String               @db.Uuid
+  assignedMechanicId String?              @db.Uuid
+  status             ServiceRequestStatus @default(NEW)
+  rawText            String               @db.Text
+  aiCategory         String?
+  aiDiagnosis        String?              @db.Text
+  aiTags             String[]             @default([])
+  aiPriority         RequestPriority      @default(NORMAL)
+  mechanicChecklist  Json?
+  dviPhotoUrls       String[]             @default([])
+  mechanicComments   String[]             @default([])
+  finalAmount        Decimal?             @db.Decimal(12, 2)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  completedAt        DateTime?
+
+  workshop         Workshop      @relation(fields: [workshopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vehicle          Vehicle       @relation(fields: [vehicleId, workshopId], references: [id, workshopId], onDelete: Restrict, onUpdate: Cascade)
+  assignedMechanic User?         @relation("AssignedMechanic", fields: [assignedMechanicId, workshopId], references: [id, workshopId], onDelete: Restrict, onUpdate: Cascade)
+  items            RequestItem[]
+
+  @@unique([id, workshopId])
+  @@index([workshopId, status])
+  @@index([workshopId, vehicleId])
+  @@index([workshopId, assignedMechanicId])
+  @@index([workshopId, createdAt])
+}
+
+model ServiceItem {
+  id            String          @id @default(uuid()) @db.Uuid
+  workshopId    String          @db.Uuid
+  sku           String?
+  name          String
+  description   String?         @db.Text
+  type          ServiceItemType
+  unit          ServiceItemUnit @default(PIECE)
+  unitPrice     Decimal         @db.Decimal(12, 2)
+  stockQuantity Decimal?        @db.Decimal(12, 3)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  workshop     Workshop      @relation(fields: [workshopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  requestItems RequestItem[]
+
+  @@unique([id, workshopId])
+  @@unique([workshopId, sku])
+  @@index([workshopId, type, isActive])
+}
+
+/// Invoice line joining a request to a catalog item. Snapshot fields preserve history.
+model RequestItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  workshopId        String   @db.Uuid
+  serviceRequestId  String   @db.Uuid
+  serviceItemId     String   @db.Uuid
+  nameSnapshot      String
+  quantity          Decimal  @db.Decimal(12, 3)
+  unitPriceSnapshot Decimal  @db.Decimal(12, 2)
+  createdAt         DateTime @default(now())
+
+  workshop       Workshop       @relation(fields: [workshopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId, workshopId], references: [id, workshopId], onDelete: Cascade, onUpdate: Cascade)
+  serviceItem    ServiceItem    @relation(fields: [serviceItemId, workshopId], references: [id, workshopId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([workshopId, serviceRequestId])
+  @@index([workshopId, serviceItemId])
+}
