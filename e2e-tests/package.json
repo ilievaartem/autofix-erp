@@ -1,0 +1,20 @@
+{
+  "name": "autofix-e2e-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pretest": "npm --prefix ../backend run build",
+    "test": "playwright test",
+    "test:api": "playwright test",
+    "test:list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.1.2",
+    "allure-commandline": "^2.43.0",
+    "allure-playwright": "^3.10.2",
+    "dotenv": "^17.4.2",
+    "typescript": "^7.0.2"
+  }
+}
