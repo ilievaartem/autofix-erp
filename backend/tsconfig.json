@@ -10,7 +10,7 @@
     "module": "nodenext",
     "target": "ES2022",
     "moduleResolution": "NodeNext",
-    "types": [],
+    "types": ["node"],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
@@ -40,12 +40,11 @@
 
     // Recommended Options
     "strict": true,
-    "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true,
+    "skipLibCheck": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
